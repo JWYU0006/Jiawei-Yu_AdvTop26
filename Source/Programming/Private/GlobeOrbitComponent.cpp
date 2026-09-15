@@ -49,3 +49,11 @@ void UGlobeOrbitComponent::BeginPlay()
 		UE_LOG(LogTemp, Warning, TEXT("SpringArm found"));
 	}
 }
+
+void UGlobeOrbitComponent::RotateOrbit(float YawInput, float PitchInput)
+{
+	FRotator CurrentRotation = OrbitPivot->GetRelativeRotation();
+	CurrentRotation.Yaw += YawInput;
+	CurrentRotation.Pitch += PitchInput;
+	OrbitPivot->SetRelativeRotation(CurrentRotation);
+}

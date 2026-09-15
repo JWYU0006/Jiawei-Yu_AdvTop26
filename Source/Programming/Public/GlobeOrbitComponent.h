@@ -17,6 +17,8 @@ class PROGRAMMING_API UGlobeOrbitComponent : public UActorComponent
 public:
 	// Sets default values for this component's properties
 	UGlobeOrbitComponent();
+	UFUNCTION(BlueprintCallable)
+	void RotateOrbit(float YawInput, float PitchInput);
 
 protected:
 	// Called when the game starts
