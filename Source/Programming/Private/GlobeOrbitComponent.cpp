@@ -4,6 +4,11 @@
 #include "components/SceneComponent.h"
 #include "GameFramework/SpringArmComponent.h"
 
+UGlobeOrbitComponent::UGlobeOrbitComponent()
+{
+	PrimaryComponentTick.bCanEverTick = false;
+}
+
 // Called when the game starts
 void UGlobeOrbitComponent::BeginPlay()
 {
