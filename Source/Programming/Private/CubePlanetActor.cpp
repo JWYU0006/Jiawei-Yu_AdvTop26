@@ -8,13 +8,18 @@
 ACubePlanetActor::ACubePlanetActor()
 {
 	// Set this actor to call Tick() every frame.  You can turn this off to improve performance if you don't need it.
-	PrimaryActorTick.bCanEverTick = false;
+	PrimaryActorTick.bCanEverTick = true;
 
 	DynamicMeshComponent = CreateDefaultSubobject<UDynamicMeshComponent>(
 		TEXT("DynamicMeshComponent")
 	);
 
 	RootComponent = DynamicMeshComponent;
+
+	// Set collision, accept mouse click
+	DynamicMeshComponent->SetCollisionEnabled(ECollisionEnabled::QueryOnly);
+	DynamicMeshComponent->SetCollisionResponseToAllChannels(ECR_Block);
+	DynamicMeshComponent->EnableComplexAsSimpleCollision();
 }
 
 // Called when the game starts or when spawned
@@ -23,22 +28,75 @@ void ACubePlanetActor::BeginPlay()
 	Super::BeginPlay();
 
 	FDynamicMesh3 FaceMesh;
-
 	GenerateCubeFace(ECubePlanetFace::CubePlanetFacePositiveX, FaceMesh);
 	GenerateCubeFace(ECubePlanetFace::CubePlanetFaceNegativeX, FaceMesh);
 	GenerateCubeFace(ECubePlanetFace::CubePlanetFacePositiveY, FaceMesh);
 	GenerateCubeFace(ECubePlanetFace::CubePlanetFaceNegativeY, FaceMesh);
 	GenerateCubeFace(ECubePlanetFace::CubePlanetFacePositiveZ, FaceMesh);
 	GenerateCubeFace(ECubePlanetFace::CubePlanetFaceNegativeZ, FaceMesh);
-
 	// void SetMesh ( UE::Geometry::FDynamicMesh3&& MoveMesh) -- UE Document -- UDynamicMesh
 	DynamicMeshComponent->SetMesh(MoveTemp(FaceMesh));
+	DynamicMeshComponent->UpdateCollision(false);
+
+	// Bind event OnCubeClicked to this Actor
+	DynamicMeshComponent->OnClicked.AddDynamic(this, &ACubePlanetActor::OnCubeClicked);
+	// Code below should be in a dedicated PlayerController, here is for quick test.
+	APlayerController* PlayerController = GetWorld()->GetFirstPlayerController();
+	if (PlayerController)
+	{
+		PlayerController->bShowMouseCursor = true;
+		PlayerController->bEnableClickEvents = true;
+	}
 }
 
 // Called every frame
 void ACubePlanetActor::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
+
+
+	GEngine->AddOnScreenDebugMessage(
+		0,
+		0.0f,
+		FColor::White,
+		TEXT("Tick Running")
+	);
+
+	APlayerController* PlayerController =
+		GetWorld()->GetFirstPlayerController();
+
+	if (!PlayerController)
+		return;
+
+	FHitResult HitResult;
+
+	bool bHit = PlayerController->GetHitResultUnderCursor(
+		ECC_Visibility,
+		false,
+		HitResult
+	);
+
+	if (bHit)
+	{
+		GEngine->AddOnScreenDebugMessage(
+			1,
+			0.0f,
+			FColor::Green,
+			FString::Printf(
+				TEXT("Hit: %s"),
+				*GetNameSafe(HitResult.GetActor())
+			)
+		);
+	}
+	else
+	{
+		GEngine->AddOnScreenDebugMessage(
+			1,
+			0.0f,
+			FColor::Red,
+			TEXT("No Hit")
+		);
+	}
 }
 
 void ACubePlanetActor::GenerateCubeFace(ECubePlanetFace Face, FDynamicMesh3& FaceMesh)
@@ -144,5 +202,37 @@ void ACubePlanetActor::GenerateCubeFace(ECubePlanetFace Face, FDynamicMesh3& Fac
 			MeshVerticesIndexes[TrianglesVerticesIndex[i + 1]],
 			MeshVerticesIndexes[TrianglesVerticesIndex[i + 2]]
 		);
+	}
+}
+
+void ACubePlanetActor::OnCubeClicked(UPrimitiveComponent* TouchedComponent, FKey ButtonPressed)
+{
+	GEngine->AddOnScreenDebugMessage(
+		-1, 2.0f, FColor::Yellow,
+		TEXT("Cube clicked")
+	);
+	APlayerController* PlayerController = GetWorld()->GetFirstPlayerController();
+	if (PlayerController)
+	{
+		GEngine->AddOnScreenDebugMessage(
+			-1, 5.0f, FColor::Green,
+			TEXT("PlayerController found")
+		);
+
+		PlayerController->bShowMouseCursor = true;
+		PlayerController->bEnableClickEvents = true;
+	}
+	else
+	{
+		GEngine->AddOnScreenDebugMessage(
+			-1, 5.0f, FColor::Red,
+			TEXT("PlayerController NOT found")
+		);
+		return;
+	}
+	FHitResult HitResult;
+	if (PlayerController->GetHitResultUnderCursor(ECC_Visibility, false, HitResult))
+	{
+		DrawDebugSphere(GetWorld(), HitResult.ImpactPoint, 25, 12, FColor::Red, false, 2);
 	}
 }

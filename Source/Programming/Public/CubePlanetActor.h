@@ -31,7 +31,11 @@ class PROGRAMMING_API ACubePlanetActor : public AActor
 	int32 CubeFaceResolution = 4;
 	UPROPERTY(EditAnywhere, category = "CubePlanet")
 	float PlanetSize = 1000.0f;
-
+	
+	// Cube's OnClick event
+	UFUNCTION()
+	void OnCubeClicked(UPrimitiveComponent* TouchedComponent, FKey ButtonPressed);
+	
 public:
 	// Sets default values for this actor's properties
 	ACubePlanetActor();
