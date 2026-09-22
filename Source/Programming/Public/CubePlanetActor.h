@@ -8,16 +8,25 @@
 #include "GameFramework/Actor.h"
 #include "CubePlanetActor.generated.h"
 
+// This enum needs to be before 'class PROGRAMMING_API ACubePlanetActor : public AActor'
+// ECubeFace conflicts with an existing UE enumeration
+enum class ECubePlanetFace
+{
+	CubePlanetFacePositiveX, CubePlanetFaceNegativeX,
+	CubePlanetFacePositiveY, CubePlanetFaceNegativeY,
+	CubePlanetFacePositiveZ, CubePlanetFaceNegativeZ
+};
+
 UCLASS()
 class PROGRAMMING_API ACubePlanetActor : public AActor
 {
 	GENERATED_BODY()
 
-	//Add a DynamicMeshComponent to this Actor
+	// Add a DynamicMeshComponent to this Actor
 	UPROPERTY(VisibleAnywhere)
 	TObjectPtr<UDynamicMeshComponent> DynamicMeshComponent;
 
-	//
+	// Customizable settings
 	UPROPERTY(EditAnywhere, category = "CubePlanet")
 	int32 CubeFaceResolution = 4;
 	UPROPERTY(EditAnywhere, category = "CubePlanet")
@@ -31,8 +40,8 @@ protected:
 	// Called when the game starts or when spawned
 	virtual void BeginPlay() override;
 
-	//Function that generate a cube face based on CubeFaceResolution
-	void GenerateCubeFace();
+	// Function that generate a cube face based on CubeFaceResolution
+	void GenerateCubeFace(ECubePlanetFace Face, FDynamicMesh3& FaceMesh);
 
 public:
 	// Called every frame
