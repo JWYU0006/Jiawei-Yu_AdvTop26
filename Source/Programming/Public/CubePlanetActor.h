@@ -28,7 +28,7 @@ class PROGRAMMING_API ACubePlanetActor : public AActor
 
 	// -- Customizable settings --
 	UPROPERTY(EditAnywhere, category = "CubePlanet")
-	int32 CubeFaceResolution = 4;
+	int32 CubeFaceResolution = 16;
 	// Length of the edge of the cube and diameter of the planet
 	UPROPERTY(EditAnywhere, category = "CubePlanet")
 	// planet radius

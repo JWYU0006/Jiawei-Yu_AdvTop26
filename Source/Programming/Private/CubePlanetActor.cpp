@@ -74,7 +74,7 @@ void ACubePlanetActor::Tick(float DeltaTime)
 	}
 
 	// Draw a reference debug sphere
-	DrawDebugSphere(GetWorld(), FVector::Zero(), PlanetSize, 32, FColor::Green, true);
+	// DrawDebugSphere(GetWorld(), FVector::Zero(), PlanetSize, 32, FColor::Green, true);
 }
 
 void ACubePlanetActor::GenerateCubeFace(ECubePlanetFace Face, FDynamicMesh3& FaceMesh) const
@@ -125,16 +125,22 @@ void ACubePlanetActor::GenerateCubeFace(ECubePlanetFace Face, FDynamicMesh3& Fac
 		for (int32 x = 0; x <= CubeFaceResolution; ++x)
 		{
 			// `static_cast` is the standard approach; in this simple use case, using `(float)` directly makes no difference.
-			float u = static_cast<float>(x) / CubeFaceResolution;
-			float v = static_cast<float>(y) / CubeFaceResolution;
+			// t in [-1, 1], evenly spaced
+			float u = static_cast<float>(x) / CubeFaceResolution * 2.0f - 1.0f;
+			float v = static_cast<float>(y) / CubeFaceResolution * 2.0f - 1.0f;
+			// Tangent warp: make the angle (not the position on the cube) evenly spaced, so the sphere is more uniform
+			u = FMath::Tan(u * UE_PI / 4.0f);
+			v = FMath::Tan(v * UE_PI / 4.0f);
 			// When an axis is used as the normal and the positive direction of the axis points toward the camera,
 			// -the vertices are always arranged from bottom-right to top-left.
-			FVector Vertex = FaceNormal * PlanetSize + AxisA * ((u - 0.5f) * PlanetSize * 2) + AxisB * ((v - 0.5f) * PlanetSize * 2);
+			FVector Vertex = FaceNormal + AxisA * u + AxisB * v;
+			// Normalize vertex to spherize
+			Vertex = Vertex.GetSafeNormal() * PlanetSize;
 			Vertices.Add(Vertex);
 			// Draw a debug box at the position of the first point
 			if (0 == x && 0 == y && Face == ECubePlanetFace::CubePlanetFacePositiveX)
 			{
-				DrawDebugBox(GetWorld(), Vertex, FVector(20), FColor::Red, true);
+				DrawDebugBox(GetWorld(), Vertex, FVector(20), FColor::Green, true);
 			}
 		}
 	}
