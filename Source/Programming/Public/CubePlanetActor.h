@@ -9,8 +9,7 @@
 #include "CubePlanetActor.generated.h"
 
 // This enum needs to be before 'class PROGRAMMING_API ACubePlanetActor : public AActor'
-// ECubeFace conflicts with an existing UE enumeration
-enum class ECubePlanetFace
+enum class ECubePlanetFace // ECubeFace conflicts with an existing UE enumeration
 {
 	CubePlanetFacePositiveX, CubePlanetFaceNegativeX,
 	CubePlanetFacePositiveY, CubePlanetFaceNegativeY,
@@ -22,32 +21,38 @@ class PROGRAMMING_API ACubePlanetActor : public AActor
 {
 	GENERATED_BODY()
 
+	// -- Initialization --
 	// Add a DynamicMeshComponent to this Actor
 	UPROPERTY(VisibleAnywhere)
 	TObjectPtr<UDynamicMeshComponent> DynamicMeshComponent;
 
-	// Customizable settings
+	// -- Customizable settings --
 	UPROPERTY(EditAnywhere, category = "CubePlanet")
 	int32 CubeFaceResolution = 4;
+	// Length of the edge of the cube and diameter of the planet
 	UPROPERTY(EditAnywhere, category = "CubePlanet")
-	float PlanetSize = 1000.0f;
-	
-	// Cube's OnClick event
+	// planet radius
+	float PlanetSize = 500.0f;
+
+	// -- Event --
 	UFUNCTION()
-	void OnCubeClicked(UPrimitiveComponent* TouchedComponent, FKey ButtonPressed);
-	
+	void OnCubeClicked(UPrimitiveComponent* TouchedComponent, FKey ButtonPressed) const;
+
 public:
 	// Sets default values for this actor's properties
 	ACubePlanetActor();
+
+	// Only for collision test
+	virtual void Tick(float DeltaTime) override;
 
 protected:
 	// Called when the game starts or when spawned
 	virtual void BeginPlay() override;
 
-	// Function that generate a cube face based on CubeFaceResolution
-	void GenerateCubeFace(ECubePlanetFace Face, FDynamicMesh3& FaceMesh);
+	// Declare a global PlayerController variable
+	UPROPERTY()
+	APlayerController* PlayerController = nullptr;
 
-public:
-	// Called every frame
-	virtual void Tick(float DeltaTime) override;
+	// Function that generate a cube face based on CubeFaceResolution
+	void GenerateCubeFace(ECubePlanetFace Face, FDynamicMesh3& FaceMesh) const;
 };

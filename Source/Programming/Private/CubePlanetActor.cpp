@@ -13,7 +13,6 @@ ACubePlanetActor::ACubePlanetActor()
 	DynamicMeshComponent = CreateDefaultSubobject<UDynamicMeshComponent>(
 		TEXT("DynamicMeshComponent")
 	);
-
 	RootComponent = DynamicMeshComponent;
 
 	// Set collision, accept mouse click
@@ -27,6 +26,7 @@ void ACubePlanetActor::BeginPlay()
 {
 	Super::BeginPlay();
 
+	// Declare FaceMesh and generate all 6 cube faces
 	FDynamicMesh3 FaceMesh;
 	GenerateCubeFace(ECubePlanetFace::CubePlanetFacePositiveX, FaceMesh);
 	GenerateCubeFace(ECubePlanetFace::CubePlanetFaceNegativeX, FaceMesh);
@@ -40,8 +40,9 @@ void ACubePlanetActor::BeginPlay()
 
 	// Bind event OnCubeClicked to this Actor
 	DynamicMeshComponent->OnClicked.AddDynamic(this, &ACubePlanetActor::OnCubeClicked);
+
 	// Code below should be in a dedicated PlayerController, here is for quick test.
-	APlayerController* PlayerController = GetWorld()->GetFirstPlayerController();
+	PlayerController = GetWorld()->GetFirstPlayerController();
 	if (PlayerController)
 	{
 		PlayerController->bShowMouseCursor = true;
@@ -53,35 +54,14 @@ void ACubePlanetActor::BeginPlay()
 void ACubePlanetActor::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
+	GEngine->AddOnScreenDebugMessage(0, 0.0f, FColor::White, TEXT("Tick Running"));
 
-
-	GEngine->AddOnScreenDebugMessage(
-		0,
-		0.0f,
-		FColor::White,
-		TEXT("Tick Running")
-	);
-
-	APlayerController* PlayerController =
-		GetWorld()->GetFirstPlayerController();
-
-	if (!PlayerController)
-		return;
-
-	FHitResult HitResult;
-
-	bool bHit = PlayerController->GetHitResultUnderCursor(
-		ECC_Visibility,
-		false,
-		HitResult
-	);
-
-	if (bHit)
+	// Custom hit test
+	if (!PlayerController) return;
+	if (FHitResult HitResult; PlayerController->GetHitResultUnderCursor(ECC_Visibility, false, HitResult))
 	{
 		GEngine->AddOnScreenDebugMessage(
-			1,
-			0.0f,
-			FColor::Green,
+			1, 0.0f, FColor::Green,
 			FString::Printf(
 				TEXT("Hit: %s"),
 				*GetNameSafe(HitResult.GetActor())
@@ -90,20 +70,16 @@ void ACubePlanetActor::Tick(float DeltaTime)
 	}
 	else
 	{
-		GEngine->AddOnScreenDebugMessage(
-			1,
-			0.0f,
-			FColor::Red,
-			TEXT("No Hit")
-		);
+		GEngine->AddOnScreenDebugMessage(1, 0.0f, FColor::Red, TEXT("No Hit"));
 	}
+
+	// Draw a reference debug sphere
+	DrawDebugSphere(GetWorld(), FVector::Zero(), PlanetSize, 32, FColor::Green, true);
 }
 
-void ACubePlanetActor::GenerateCubeFace(ECubePlanetFace Face, FDynamicMesh3& FaceMesh)
+void ACubePlanetActor::GenerateCubeFace(ECubePlanetFace Face, FDynamicMesh3& FaceMesh) const
 {
-	FVector FaceNormal;
-	FVector AxisA;
-	FVector AxisB;
+	FVector FaceNormal, AxisA, AxisB;
 
 	switch (Face)
 	{
@@ -151,11 +127,10 @@ void ACubePlanetActor::GenerateCubeFace(ECubePlanetFace Face, FDynamicMesh3& Fac
 			// `static_cast` is the standard approach; in this simple use case, using `(float)` directly makes no difference.
 			float u = static_cast<float>(x) / CubeFaceResolution;
 			float v = static_cast<float>(y) / CubeFaceResolution;
-			// When an axis is used as the normal and the positive direction of the axis points toward the camera, -
-			// -the points are always arranged from bottom-right to top-left.
-			FVector Vertex = FaceNormal * (PlanetSize * 0.5) + AxisA * ((u - 0.5f) * PlanetSize) + AxisB * ((v - 0.5f) * PlanetSize);
+			// When an axis is used as the normal and the positive direction of the axis points toward the camera,
+			// -the vertices are always arranged from bottom-right to top-left.
+			FVector Vertex = FaceNormal * PlanetSize + AxisA * ((u - 0.5f) * PlanetSize * 2) + AxisB * ((v - 0.5f) * PlanetSize * 2);
 			Vertices.Add(Vertex);
-
 			// Draw a debug box at the position of the first point
 			if (0 == x && 0 == y && Face == ECubePlanetFace::CubePlanetFacePositiveX)
 			{
@@ -181,9 +156,6 @@ void ACubePlanetActor::GenerateCubeFace(ECubePlanetFace Face, FDynamicMesh3& Fac
 		}
 	}
 
-	// Comment out the declaration and use the passed-in FaceMesh.
-	//FDynamicMesh3 FaceMesh;
-
 	// Without vertex indexing, 'AppendTriangle' starts from zero each time it runs, resulting in the same face being generated six times.
 	TArray<int32> MeshVerticesIndexes;
 	// Standard coding practice: use `const` to make the value constant and `&` for only pass-by-reference.
@@ -205,29 +177,19 @@ void ACubePlanetActor::GenerateCubeFace(ECubePlanetFace Face, FDynamicMesh3& Fac
 	}
 }
 
-void ACubePlanetActor::OnCubeClicked(UPrimitiveComponent* TouchedComponent, FKey ButtonPressed)
+void ACubePlanetActor::OnCubeClicked(UPrimitiveComponent* TouchedComponent, FKey ButtonPressed) const
 {
-	GEngine->AddOnScreenDebugMessage(
-		-1, 2.0f, FColor::Yellow,
-		TEXT("Cube clicked")
-	);
-	APlayerController* PlayerController = GetWorld()->GetFirstPlayerController();
+	GEngine->AddOnScreenDebugMessage(-1, 2.0f, FColor::Yellow, TEXT("Cube clicked"));
 	if (PlayerController)
 	{
-		GEngine->AddOnScreenDebugMessage(
-			-1, 5.0f, FColor::Green,
-			TEXT("PlayerController found")
-		);
+		GEngine->AddOnScreenDebugMessage(-1, 5.0f, FColor::Green, TEXT("PlayerController found"));
 
 		PlayerController->bShowMouseCursor = true;
 		PlayerController->bEnableClickEvents = true;
 	}
 	else
 	{
-		GEngine->AddOnScreenDebugMessage(
-			-1, 5.0f, FColor::Red,
-			TEXT("PlayerController NOT found")
-		);
+		GEngine->AddOnScreenDebugMessage(-1, 5.0f, FColor::Red, TEXT("PlayerController NOT found"));
 		return;
 	}
 	FHitResult HitResult;
