@@ -42,12 +42,12 @@ void ACubePlanetActor::BeginPlay()
 	DynamicMeshComponent->OnClicked.AddDynamic(this, &ACubePlanetActor::OnCubeClicked);
 
 	// Code below should be in a dedicated PlayerController, here is for quick test.
-	PlayerController = GetWorld()->GetFirstPlayerController();
-	if (PlayerController)
-	{
-		PlayerController->bShowMouseCursor = true;
-		PlayerController->bEnableClickEvents = true;
-	}
+	// PlayerController = GetWorld()->GetFirstPlayerController();
+	// if (PlayerController)
+	// {
+	// 	PlayerController->bShowMouseCursor = true;
+	// 	PlayerController->bEnableClickEvents = true;
+	// }
 }
 
 // Called every frame
