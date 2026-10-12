@@ -73,7 +73,7 @@ void ACubePlanetActor::Tick(float DeltaTime)
 		GEngine->AddOnScreenDebugMessage(1, 0.0f, FColor::Red, TEXT("No Hit"));
 	}
 
-	// Draw a reference debug sphere
+	// Draw a planetary reference debug sphere
 	// DrawDebugSphere(GetWorld(), FVector::Zero(), PlanetSize, 32, FColor::Green, true);
 }
 
