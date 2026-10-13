@@ -3,6 +3,8 @@
 #include "CubePlanetActor.h"
 #include "DynamicMesh/DynamicMesh3.h"
 #include "DrawDebugHelpers.h"
+#include "ShaderCompiler.h"
+#include "DynamicMesh/DynamicMeshAttributeSet.h"
 
 // Sets default values
 ACubePlanetActor::ACubePlanetActor()
@@ -46,6 +48,8 @@ void ACubePlanetActor::GeneratePlanet()
 {
 	// Declare FaceMesh and generate all 6 cube faces
 	FDynamicMesh3 FaceMesh;
+	// Enable UV and normal overlays
+	FaceMesh.EnableAttributes();
 	GenerateCubeFace(ECubePlanetFace::CubePlanetFacePositiveX, FaceMesh);
 	GenerateCubeFace(ECubePlanetFace::CubePlanetFaceNegativeX, FaceMesh);
 	GenerateCubeFace(ECubePlanetFace::CubePlanetFacePositiveY, FaceMesh);
@@ -54,6 +58,7 @@ void ACubePlanetActor::GeneratePlanet()
 	GenerateCubeFace(ECubePlanetFace::CubePlanetFaceNegativeZ, FaceMesh);
 	// void SetMesh ( UE::Geometry::FDynamicMesh3&& MoveMesh) -- UE Document -- UDynamicMesh
 	DynamicMeshComponent->SetMesh(MoveTemp(FaceMesh));
+	DynamicMeshComponent->SetMaterial(0, PlanetMaterial);
 	DynamicMeshComponent->UpdateCollision(false);
 }
 
@@ -106,7 +111,6 @@ void ACubePlanetActor::Tick(float DeltaTime)
 void ACubePlanetActor::GenerateCubeFace(ECubePlanetFace Face, FDynamicMesh3& FaceMesh) const
 {
 	FVector FaceNormal, AxisA, AxisB;
-
 	switch (Face)
 	{
 	case ECubePlanetFace::CubePlanetFacePositiveX:
@@ -142,8 +146,7 @@ void ACubePlanetActor::GenerateCubeFace(ECubePlanetFace Face, FDynamicMesh3& Fac
 	}
 
 	TArray<FVector> Vertices;
-	TArray<int32> TrianglesVerticesIndex;
-
+	TArray<FVector2f> UVs;
 	// Vertices need to be one more than the resolution, so use "<=" in for loops
 	// `++x` is the standard practice and is preferable to `x++`.
 	for (int32 y = 0; y <= CubeFaceResolution; ++y)
@@ -163,9 +166,12 @@ void ACubePlanetActor::GenerateCubeFace(ECubePlanetFace Face, FDynamicMesh3& Fac
 			// Normalize vertex to spherize
 			Vertex = Vertex.GetSafeNormal() * PlanetRadiusSize;
 			Vertices.Add(Vertex);
+			// One grid cell per quad: UV of vertex (x, y) is (x, y), no need to normalize to 0-1.
+			UVs.Add(FVector2f(x, y));
 		}
 	}
 
+	TArray<int32> TrianglesVerticesIndex;
 	// 0 1 2 3 4 // Triangles are (0, 1, 5), (1, 6, 5), etc.
 	// 5 6 7 8 9 //
 	for (int32 y = 0; y < CubeFaceResolution; ++y)
@@ -183,24 +189,40 @@ void ACubePlanetActor::GenerateCubeFace(ECubePlanetFace Face, FDynamicMesh3& Fac
 		}
 	}
 
+	UE::Geometry::FDynamicMeshUVOverlay* UVOverlay = FaceMesh.Attributes()->PrimaryUV();
+	UE::Geometry::FDynamicMeshNormalOverlay* NormalOverlay = FaceMesh.Attributes()->PrimaryNormals();
+	TArray<int32> UVElementIndexes;
+	TArray<int32> NormalElementIndexes;
+
 	// Without vertex indexing, 'AppendTriangle' starts from zero each time it runs, resulting in the same face being generated six times.
 	TArray<int32> MeshVerticesIndexes;
+
 	// Standard coding practice: use `const` to make the value constant and `&` for only pass-by-reference.
-	for (const FVector& Vertex : Vertices)
+	// for (const FVector& Vertex : Vertices)
+	// {
+	// 	int32 VertexIndex = FaceMesh.AppendVertex(FVector3d(Vertex));
+	// 	MeshVerticesIndexes.Add(VertexIndex);
+	// }
+
+	// change to this type of for loop to add uv and normal
+	for (int32 i = 0; i < Vertices.Num(); ++i)
 	{
-		int32 VertexIndex = FaceMesh.AppendVertex(FVector3d(Vertex));
-		MeshVerticesIndexes.Add(VertexIndex);
+		MeshVerticesIndexes.Add(FaceMesh.AppendVertex(Vertices[i]));
+		UVElementIndexes.Add(UVOverlay->AppendElement(UVs[i]));
+		NormalElementIndexes.Add(NormalOverlay->AppendElement(FVector3f(Vertices[i].GetSafeNormal())));
 	}
 
 	// Three indexes are retrieved from the `TrianglesVerticesIndex` array to serve as the vertices of a triangle
 	// Using a `for` loop with an increment of 3 allows to reach the indexes for the next triangle
 	for (int32 i = 0; i < TrianglesVerticesIndex.Num(); i += 3)
 	{
-		FaceMesh.AppendTriangle(
-			MeshVerticesIndexes[TrianglesVerticesIndex[i]],
-			MeshVerticesIndexes[TrianglesVerticesIndex[i + 1]],
-			MeshVerticesIndexes[TrianglesVerticesIndex[i + 2]]
-		);
+		const int32 A = TrianglesVerticesIndex[i];
+		const int32 B = TrianglesVerticesIndex[i + 1];
+		const int32 C = TrianglesVerticesIndex[i + 2];
+		const int32 TriangleID = FaceMesh.AppendTriangle(MeshVerticesIndexes[A], MeshVerticesIndexes[B], MeshVerticesIndexes[C]);
+
+		UVOverlay->SetTriangle(TriangleID, UE::Geometry::FIndex3i(UVElementIndexes[A], UVElementIndexes[B], UVElementIndexes[C]));
+		NormalOverlay->SetTriangle(TriangleID, UE::Geometry::FIndex3i(NormalElementIndexes[A], NormalElementIndexes[B], NormalElementIndexes[C]));
 	}
 }
 

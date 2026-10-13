@@ -31,6 +31,8 @@ class PROGRAMMING_API ACubePlanetActor : public AActor
 	int32 CubeFaceResolution = 16;
 	UPROPERTY(EditAnywhere, category = "CubePlanet", meta = (ClampMin = "1.0"))
 	float PlanetRadiusSize = 5000.0f;
+	UPROPERTY(EditAnywhere, category = "CubePlanet")
+	TObjectPtr<UMaterialInterface> PlanetMaterial;
 
 	// -- Event --
 	UFUNCTION()
