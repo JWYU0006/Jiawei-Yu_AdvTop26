@@ -27,16 +27,14 @@ class PROGRAMMING_API ACubePlanetActor : public AActor
 	TObjectPtr<UDynamicMeshComponent> DynamicMeshComponent;
 
 	// -- Customizable settings --
-	UPROPERTY(EditAnywhere, category = "CubePlanet")
+	UPROPERTY(EditAnywhere, category = "CubePlanet", meta = (ClampMin = "2", ClampMax = "256"))
 	int32 CubeFaceResolution = 16;
-	// Length of the edge of the cube and diameter of the planet
-	UPROPERTY(EditAnywhere, category = "CubePlanet")
-	// planet radius
-	float PlanetSize = 500.0f;
+	UPROPERTY(EditAnywhere, category = "CubePlanet", meta = (ClampMin = "1.0"))
+	float PlanetRadiusSize = 5000.0f;
 
 	// -- Event --
 	UFUNCTION()
-	void OnCubeClicked(UPrimitiveComponent* TouchedComponent, FKey ButtonPressed) const;
+	void OnCubeClicked(UPrimitiveComponent* TouchedComponent, FKey ButtonPressed);
 
 public:
 	// Sets default values for this actor's properties
@@ -55,4 +53,11 @@ protected:
 
 	// Function that generate a cube face based on CubeFaceResolution
 	void GenerateCubeFace(ECubePlanetFace Face, FDynamicMesh3& FaceMesh) const;
+
+#if WITH_EDITOR
+	virtual void PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedEvent) override;
+#endif
+
+	UFUNCTION(CallInEditor, Category = "CubePlanet")
+	void GeneratePlanet();
 };

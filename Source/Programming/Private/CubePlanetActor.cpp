@@ -21,11 +21,29 @@ ACubePlanetActor::ACubePlanetActor()
 	DynamicMeshComponent->EnableComplexAsSimpleCollision();
 }
 
-// Called when the game starts or when spawned
-void ACubePlanetActor::BeginPlay()
+// Update in Engine Editor
+#if WITH_EDITOR
+void ACubePlanetActor::PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedEvent)
 {
-	Super::BeginPlay();
+	Super::PostEditChangeProperty(PropertyChangedEvent);
 
+	// Skip while dragging the slider, only regenerate when the value is committed
+	if (PropertyChangedEvent.ChangeType == EPropertyChangeType::Interactive)
+	{
+		return;
+	}
+
+	const FName PropertyName = PropertyChangedEvent.GetPropertyName();
+	if (PropertyName == GET_MEMBER_NAME_CHECKED(ACubePlanetActor, CubeFaceResolution) ||
+		PropertyName == GET_MEMBER_NAME_CHECKED(ACubePlanetActor, PlanetRadiusSize))
+	{
+		GeneratePlanet();
+	}
+}
+#endif
+
+void ACubePlanetActor::GeneratePlanet()
+{
 	// Declare FaceMesh and generate all 6 cube faces
 	FDynamicMesh3 FaceMesh;
 	GenerateCubeFace(ECubePlanetFace::CubePlanetFacePositiveX, FaceMesh);
@@ -37,9 +55,17 @@ void ACubePlanetActor::BeginPlay()
 	// void SetMesh ( UE::Geometry::FDynamicMesh3&& MoveMesh) -- UE Document -- UDynamicMesh
 	DynamicMeshComponent->SetMesh(MoveTemp(FaceMesh));
 	DynamicMeshComponent->UpdateCollision(false);
+}
+
+// Called when the game starts or when spawned
+void ACubePlanetActor::BeginPlay()
+{
+	Super::BeginPlay();
+
+	GeneratePlanet();
 
 	// Bind event OnCubeClicked to this Actor
-	DynamicMeshComponent->OnClicked.AddDynamic(this, &ACubePlanetActor::OnCubeClicked);
+	// DynamicMeshComponent->OnClicked.AddDynamic(this, &ACubePlanetActor::OnCubeClicked);
 
 	// Code below should be in a dedicated PlayerController, here is for quick test.
 	// PlayerController = GetWorld()->GetFirstPlayerController();
@@ -74,7 +100,7 @@ void ACubePlanetActor::Tick(float DeltaTime)
 	}
 
 	// Draw a planetary reference debug sphere
-	// DrawDebugSphere(GetWorld(), FVector::Zero(), PlanetSize, 32, FColor::Green, true);
+	// DrawDebugSphere(GetWorld(), FVector::Zero(), PlanetRadiusSize, 32, FColor::Green, true);
 }
 
 void ACubePlanetActor::GenerateCubeFace(ECubePlanetFace Face, FDynamicMesh3& FaceMesh) const
@@ -135,13 +161,8 @@ void ACubePlanetActor::GenerateCubeFace(ECubePlanetFace Face, FDynamicMesh3& Fac
 			// -the vertices are always arranged from bottom-right to top-left.
 			FVector Vertex = FaceNormal + AxisA * u + AxisB * v;
 			// Normalize vertex to spherize
-			Vertex = Vertex.GetSafeNormal() * PlanetSize;
+			Vertex = Vertex.GetSafeNormal() * PlanetRadiusSize;
 			Vertices.Add(Vertex);
-			// Draw a debug box at the position of the first point
-			if (0 == x && 0 == y && Face == ECubePlanetFace::CubePlanetFacePositiveX)
-			{
-				DrawDebugBox(GetWorld(), Vertex, FVector(20), FColor::Green, true);
-			}
 		}
 	}
 
@@ -183,7 +204,7 @@ void ACubePlanetActor::GenerateCubeFace(ECubePlanetFace Face, FDynamicMesh3& Fac
 	}
 }
 
-void ACubePlanetActor::OnCubeClicked(UPrimitiveComponent* TouchedComponent, FKey ButtonPressed) const
+void ACubePlanetActor::OnCubeClicked(UPrimitiveComponent* TouchedComponent, FKey ButtonPressed)
 {
 	GEngine->AddOnScreenDebugMessage(-1, 2.0f, FColor::Yellow, TEXT("Cube clicked"));
 	if (PlayerController)
