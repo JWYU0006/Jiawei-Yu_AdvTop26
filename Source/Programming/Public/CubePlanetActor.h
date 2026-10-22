@@ -28,11 +28,20 @@ class PROGRAMMING_API ACubePlanetActor : public AActor
 
 	// -- Customizable settings --
 	UPROPERTY(EditAnywhere, category = "CubePlanet", meta = (ClampMin = "2", ClampMax = "256"))
-	int32 CubeFaceResolution = 16;
+	int32 CubeFaceResolution = 128;
 	UPROPERTY(EditAnywhere, category = "CubePlanet", meta = (ClampMin = "1.0"))
 	float PlanetRadiusSize = 5000.0f;
 	UPROPERTY(EditAnywhere, category = "CubePlanet")
 	TObjectPtr<UMaterialInterface> PlanetMaterial;
+	// -- Terrain
+	UPROPERTY(EditAnywhere, Category = "CubePlanet|Terrain", meta = (ClampMin = "0.0"))
+	float NoiseFrequency = 2.0f;
+	UPROPERTY(EditAnywhere, Category = "CubePlanet|Terrain", meta = (ClampMin = "0.0"))
+	float NoiseAmplitude = 300.0f;
+	UPROPERTY(EditAnywhere, Category = "CubePlanet|Terrain")
+	int32 NoiseSeed = 0;
+
+	FVector NoiseOffset = FVector::ZeroVector;
 
 	// -- Event --
 	UFUNCTION()
@@ -43,7 +52,7 @@ public:
 	ACubePlanetActor();
 
 	// Only for collision test
-	virtual void Tick(float DeltaTime) override;
+	// virtual void Tick(float DeltaTime) override;
 
 protected:
 	// Called when the game starts or when spawned
@@ -55,6 +64,9 @@ protected:
 
 	// Function that generate a cube face based on CubeFaceResolution
 	void GenerateCubeFace(ECubePlanetFace Face, FDynamicMesh3& FaceMesh) const;
+	
+	// Terrain height (cm) above the base radius, sampled by a unit direction
+	float GetTerrainHeight(const FVector& Direction) const;
 
 #if WITH_EDITOR
 	virtual void PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedEvent) override;

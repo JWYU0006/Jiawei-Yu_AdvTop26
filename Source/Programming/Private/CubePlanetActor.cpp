@@ -3,7 +3,6 @@
 #include "CubePlanetActor.h"
 #include "DynamicMesh/DynamicMesh3.h"
 #include "DrawDebugHelpers.h"
-#include "ShaderCompiler.h"
 #include "DynamicMesh/DynamicMeshAttributeSet.h"
 
 // Sets default values
@@ -37,15 +36,30 @@ void ACubePlanetActor::PostEditChangeProperty(FPropertyChangedEvent& PropertyCha
 
 	const FName PropertyName = PropertyChangedEvent.GetPropertyName();
 	if (PropertyName == GET_MEMBER_NAME_CHECKED(ACubePlanetActor, CubeFaceResolution) ||
-		PropertyName == GET_MEMBER_NAME_CHECKED(ACubePlanetActor, PlanetRadiusSize))
+		PropertyName == GET_MEMBER_NAME_CHECKED(ACubePlanetActor, PlanetRadiusSize) ||
+		PropertyName == GET_MEMBER_NAME_CHECKED(ACubePlanetActor, NoiseFrequency) ||
+		PropertyName == GET_MEMBER_NAME_CHECKED(ACubePlanetActor, NoiseAmplitude) ||
+		PropertyName == GET_MEMBER_NAME_CHECKED(ACubePlanetActor, NoiseSeed))
 	{
 		GeneratePlanet();
 	}
 }
 #endif
 
+// Called when the game starts or when spawned
+void ACubePlanetActor::BeginPlay()
+{
+	Super::BeginPlay();
+	GeneratePlanet();
+}
+
 void ACubePlanetActor::GeneratePlanet()
 {
+	// Same seed always gives the same offset, so the same planet by using RandomStream
+	FRandomStream RandomStream(NoiseSeed);
+	NoiseOffset = FVector(RandomStream.FRandRange(-1000.0f, 1000.0f),
+	                      RandomStream.FRandRange(-1000.0f, 1000.0f),
+	                      RandomStream.FRandRange(-1000.0f, 1000.0f));
 	// Declare FaceMesh and generate all 6 cube faces
 	FDynamicMesh3 FaceMesh;
 	// Enable UV and normal overlays
@@ -62,27 +76,8 @@ void ACubePlanetActor::GeneratePlanet()
 	DynamicMeshComponent->UpdateCollision(false);
 }
 
-// Called when the game starts or when spawned
-void ACubePlanetActor::BeginPlay()
-{
-	Super::BeginPlay();
-
-	GeneratePlanet();
-
-	// Bind event OnCubeClicked to this Actor
-	// DynamicMeshComponent->OnClicked.AddDynamic(this, &ACubePlanetActor::OnCubeClicked);
-
-	// Code below should be in a dedicated PlayerController, here is for quick test.
-	// PlayerController = GetWorld()->GetFirstPlayerController();
-	// if (PlayerController)
-	// {
-	// 	PlayerController->bShowMouseCursor = true;
-	// 	PlayerController->bEnableClickEvents = true;
-	// }
-}
-
 // Called every frame
-void ACubePlanetActor::Tick(float DeltaTime)
+/*void ACubePlanetActor::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
 	GEngine->AddOnScreenDebugMessage(0, 0.0f, FColor::White, TEXT("Tick Running"));
@@ -103,10 +98,7 @@ void ACubePlanetActor::Tick(float DeltaTime)
 	{
 		GEngine->AddOnScreenDebugMessage(1, 0.0f, FColor::Red, TEXT("No Hit"));
 	}
-
-	// Draw a planetary reference debug sphere
-	// DrawDebugSphere(GetWorld(), FVector::Zero(), PlanetRadiusSize, 32, FColor::Green, true);
-}
+}*/
 
 void ACubePlanetActor::GenerateCubeFace(ECubePlanetFace Face, FDynamicMesh3& FaceMesh) const
 {
@@ -147,24 +139,21 @@ void ACubePlanetActor::GenerateCubeFace(ECubePlanetFace Face, FDynamicMesh3& Fac
 
 	TArray<FVector> Vertices;
 	TArray<FVector2f> UVs;
-	// Vertices need to be one more than the resolution, so use "<=" in for loops
-	// `++x` is the standard practice and is preferable to `x++`.
 	for (int32 y = 0; y <= CubeFaceResolution; ++y)
 	{
 		for (int32 x = 0; x <= CubeFaceResolution; ++x)
 		{
-			// `static_cast` is the standard approach; in this simple use case, using `(float)` directly makes no difference.
-			// t in [-1, 1], evenly spaced
 			float u = static_cast<float>(x) / CubeFaceResolution * 2.0f - 1.0f;
 			float v = static_cast<float>(y) / CubeFaceResolution * 2.0f - 1.0f;
 			// Tangent warp: make the angle (not the position on the cube) evenly spaced, so the sphere is more uniform
 			u = FMath::Tan(u * UE_PI / 4.0f);
 			v = FMath::Tan(v * UE_PI / 4.0f);
-			// When an axis is used as the normal and the positive direction of the axis points toward the camera,
-			// -the vertices are always arranged from bottom-right to top-left.
+			// When axis points toward the camera, the vertices are always arranged from bottom-right to top-left.
 			FVector Vertex = FaceNormal + AxisA * u + AxisB * v;
 			// Normalize vertex to spherize
 			Vertex = Vertex.GetSafeNormal() * PlanetRadiusSize;
+			const FVector Direction = Vertex.GetSafeNormal();
+			Vertex = Direction * (PlanetRadiusSize + GetTerrainHeight(Direction));
 			Vertices.Add(Vertex);
 			// One grid cell per quad: UV of vertex (x, y) is (x, y), no need to normalize to 0-1.
 			UVs.Add(FVector2f(x, y));
@@ -172,8 +161,6 @@ void ACubePlanetActor::GenerateCubeFace(ECubePlanetFace Face, FDynamicMesh3& Fac
 	}
 
 	TArray<int32> TrianglesVerticesIndex;
-	// 0 1 2 3 4 // Triangles are (0, 1, 5), (1, 6, 5), etc.
-	// 5 6 7 8 9 //
 	for (int32 y = 0; y < CubeFaceResolution; ++y)
 	{
 		for (int32 x = 0; x < CubeFaceResolution; ++x)
@@ -182,28 +169,18 @@ void ACubePlanetActor::GenerateCubeFace(ECubePlanetFace Face, FDynamicMesh3& Fac
 			TrianglesVerticesIndex.Add(i);
 			TrianglesVerticesIndex.Add(i + CubeFaceResolution + 1);
 			TrianglesVerticesIndex.Add(i + 1);
-
 			TrianglesVerticesIndex.Add(i + 1);
 			TrianglesVerticesIndex.Add(i + CubeFaceResolution + 1);
 			TrianglesVerticesIndex.Add(i + CubeFaceResolution + 2);
 		}
 	}
 
+	// Without vertex indexing, 'AppendTriangle' starts from zero each time it runs, resulting in the same face being generated six times.
+	TArray<int32> MeshVerticesIndexes;
 	UE::Geometry::FDynamicMeshUVOverlay* UVOverlay = FaceMesh.Attributes()->PrimaryUV();
 	UE::Geometry::FDynamicMeshNormalOverlay* NormalOverlay = FaceMesh.Attributes()->PrimaryNormals();
 	TArray<int32> UVElementIndexes;
 	TArray<int32> NormalElementIndexes;
-
-	// Without vertex indexing, 'AppendTriangle' starts from zero each time it runs, resulting in the same face being generated six times.
-	TArray<int32> MeshVerticesIndexes;
-
-	// Standard coding practice: use `const` to make the value constant and `&` for only pass-by-reference.
-	// for (const FVector& Vertex : Vertices)
-	// {
-	// 	int32 VertexIndex = FaceMesh.AppendVertex(FVector3d(Vertex));
-	// 	MeshVerticesIndexes.Add(VertexIndex);
-	// }
-
 	// change to this type of for loop to add uv and normal
 	for (int32 i = 0; i < Vertices.Num(); ++i)
 	{
@@ -224,6 +201,12 @@ void ACubePlanetActor::GenerateCubeFace(ECubePlanetFace Face, FDynamicMesh3& Fac
 		UVOverlay->SetTriangle(TriangleID, UE::Geometry::FIndex3i(UVElementIndexes[A], UVElementIndexes[B], UVElementIndexes[C]));
 		NormalOverlay->SetTriangle(TriangleID, UE::Geometry::FIndex3i(NormalElementIndexes[A], NormalElementIndexes[B], NormalElementIndexes[C]));
 	}
+}
+
+float ACubePlanetActor::GetTerrainHeight(const FVector& Direction) const
+{
+	const FVector SamplePoint = Direction * NoiseFrequency + NoiseOffset;
+	return FMath::PerlinNoise3D(SamplePoint) * NoiseAmplitude;
 }
 
 void ACubePlanetActor::OnCubeClicked(UPrimitiveComponent* TouchedComponent, FKey ButtonPressed)
