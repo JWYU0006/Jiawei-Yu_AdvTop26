@@ -35,17 +35,20 @@ class PROGRAMMING_API ACubePlanetActor : public AActor
 	TObjectPtr<UMaterialInterface> PlanetMaterial;
 	// -- Terrain
 	UPROPERTY(EditAnywhere, Category = "CubePlanet|Terrain", meta = (ClampMin = "0.0"))
-	float NoiseFrequency = 2.0f;
+	float DetailFrequency = 2.0f;
 	UPROPERTY(EditAnywhere, Category = "CubePlanet|Terrain", meta = (ClampMin = "0.0"))
-	float NoiseAmplitude = 300.0f;
+	float DetailAmplitude = 300.0f;
 	UPROPERTY(EditAnywhere, Category = "CubePlanet|Terrain")
 	int32 NoiseSeed = 0;
+	UPROPERTY(EditAnywhere, Category = "CubePlanet|Terrain", meta = (ClampMin = "0.0"))
+	float ContinentFrequency = 1.0f;
+	UPROPERTY(EditAnywhere, Category = "CubePlanet|Terrain", meta = (ClampMin = "0.0"))
+	float ContinentAmplitude = 600.0f;
+	UPROPERTY(EditAnywhere, Category = "CubePlanet|Terrain")
+	float SeaLevel = 0.0f;
 
-	FVector NoiseOffset = FVector::ZeroVector;
-
-	// -- Event --
-	UFUNCTION()
-	void OnCubeClicked(UPrimitiveComponent* TouchedComponent, FKey ButtonPressed);
+	FVector DetailOffset = FVector::ZeroVector;
+	FVector ContinentOffset = FVector::ZeroVector;
 
 public:
 	// Sets default values for this actor's properties
@@ -64,11 +67,14 @@ protected:
 
 	// Function that generate a cube face based on CubeFaceResolution
 	void GenerateCubeFace(ECubePlanetFace Face, FDynamicMesh3& FaceMesh) const;
-	
+
 	// Terrain height (cm) above the base radius, sampled by a unit direction
 	float GetTerrainHeight(const FVector& Direction) const;
 	// Surface normal 
 	FVector GetTerrainNormal(const FVector& Direction) const;
+	// Terrain height before ocean flattening, used for both shape and color
+	float GetRawTerrainHeight(const FVector& Direction) const;
+	FLinearColor GetTerrainColor(float RawHeight) const;
 
 #if WITH_EDITOR
 	virtual void PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedEvent) override;

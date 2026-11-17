@@ -37,9 +37,12 @@ void ACubePlanetActor::PostEditChangeProperty(FPropertyChangedEvent& PropertyCha
 	const FName PropertyName = PropertyChangedEvent.GetPropertyName();
 	if (PropertyName == GET_MEMBER_NAME_CHECKED(ACubePlanetActor, CubeFaceResolution) ||
 		PropertyName == GET_MEMBER_NAME_CHECKED(ACubePlanetActor, PlanetRadiusSize) ||
-		PropertyName == GET_MEMBER_NAME_CHECKED(ACubePlanetActor, NoiseFrequency) ||
-		PropertyName == GET_MEMBER_NAME_CHECKED(ACubePlanetActor, NoiseAmplitude) ||
-		PropertyName == GET_MEMBER_NAME_CHECKED(ACubePlanetActor, NoiseSeed))
+		PropertyName == GET_MEMBER_NAME_CHECKED(ACubePlanetActor, DetailFrequency) ||
+		PropertyName == GET_MEMBER_NAME_CHECKED(ACubePlanetActor, DetailAmplitude) ||
+		PropertyName == GET_MEMBER_NAME_CHECKED(ACubePlanetActor, NoiseSeed) ||
+		PropertyName == GET_MEMBER_NAME_CHECKED(ACubePlanetActor, ContinentFrequency) ||
+		PropertyName == GET_MEMBER_NAME_CHECKED(ACubePlanetActor, ContinentAmplitude) ||
+		PropertyName == GET_MEMBER_NAME_CHECKED(ACubePlanetActor, SeaLevel))
 	{
 		GeneratePlanet();
 	}
@@ -57,13 +60,17 @@ void ACubePlanetActor::GeneratePlanet()
 {
 	// Same seed always gives the same offset, so the same planet by using RandomStream
 	FRandomStream RandomStream(NoiseSeed);
-	NoiseOffset = FVector(RandomStream.FRandRange(-1000.0f, 1000.0f),
-	                      RandomStream.FRandRange(-1000.0f, 1000.0f),
-	                      RandomStream.FRandRange(-1000.0f, 1000.0f));
+	DetailOffset = FVector(RandomStream.FRandRange(-1000.0f, 1000.0f),
+	                       RandomStream.FRandRange(-1000.0f, 1000.0f),
+	                       RandomStream.FRandRange(-1000.0f, 1000.0f));
+	ContinentOffset = FVector(RandomStream.FRandRange(-1000.0f, 1000.0f),
+	                          RandomStream.FRandRange(-1000.0f, 1000.0f),
+	                          RandomStream.FRandRange(-1000.0f, 1000.0f));
 	// Declare FaceMesh and generate all 6 cube faces
 	FDynamicMesh3 FaceMesh;
 	// Enable UV and normal overlays
 	FaceMesh.EnableAttributes();
+	FaceMesh.Attributes()->EnablePrimaryColors();
 	GenerateCubeFace(ECubePlanetFace::CubePlanetFacePositiveX, FaceMesh);
 	GenerateCubeFace(ECubePlanetFace::CubePlanetFaceNegativeX, FaceMesh);
 	GenerateCubeFace(ECubePlanetFace::CubePlanetFacePositiveY, FaceMesh);
@@ -75,30 +82,6 @@ void ACubePlanetActor::GeneratePlanet()
 	DynamicMeshComponent->SetMaterial(0, PlanetMaterial);
 	DynamicMeshComponent->UpdateCollision(false);
 }
-
-// Called every frame
-/*void ACubePlanetActor::Tick(float DeltaTime)
-{
-	Super::Tick(DeltaTime);
-	GEngine->AddOnScreenDebugMessage(0, 0.0f, FColor::White, TEXT("Tick Running"));
-
-	// Custom hit test
-	if (!PlayerController) return;
-	if (FHitResult HitResult; PlayerController->GetHitResultUnderCursor(ECC_Visibility, false, HitResult))
-	{
-		GEngine->AddOnScreenDebugMessage(
-			1, 0.0f, FColor::Green,
-			FString::Printf(
-				TEXT("Hit: %s"),
-				*GetNameSafe(HitResult.GetActor())
-			)
-		);
-	}
-	else
-	{
-		GEngine->AddOnScreenDebugMessage(1, 0.0f, FColor::Red, TEXT("No Hit"));
-	}
-}*/
 
 void ACubePlanetActor::GenerateCubeFace(ECubePlanetFace Face, FDynamicMesh3& FaceMesh) const
 {
@@ -140,6 +123,7 @@ void ACubePlanetActor::GenerateCubeFace(ECubePlanetFace Face, FDynamicMesh3& Fac
 	TArray<FVector> Vertices;
 	TArray<FVector2f> UVs;
 	TArray<FVector> Normals;
+	TArray<FLinearColor> Colors;
 	for (int32 y = 0; y <= CubeFaceResolution; ++y)
 	{
 		for (int32 x = 0; x <= CubeFaceResolution; ++x)
@@ -151,11 +135,12 @@ void ACubePlanetActor::GenerateCubeFace(ECubePlanetFace Face, FDynamicMesh3& Fac
 			v = FMath::Tan(v * UE_PI / 4.0f);
 			// When axis points toward the camera, the vertices are always arranged from bottom-right to top-left.
 			const FVector Direction = (FaceNormal + AxisA * u + AxisB * v).GetSafeNormal();
-			FVector Vertex = Direction * (PlanetRadiusSize + GetTerrainHeight(Direction));
+			const float RawHeight = GetRawTerrainHeight(Direction);
+			const FVector Vertex = Direction * (PlanetRadiusSize + FMath::Max(RawHeight, SeaLevel));
 			Vertices.Add(Vertex);
-			// One grid cell per quad: UV of vertex (x, y) is (x, y), no need to normalize to 0-1.
 			UVs.Add(FVector2f(x, y));
 			Normals.Add(GetTerrainNormal(Direction));
+			Colors.Add(GetTerrainColor(RawHeight));
 		}
 	}
 
@@ -180,13 +165,16 @@ void ACubePlanetActor::GenerateCubeFace(ECubePlanetFace Face, FDynamicMesh3& Fac
 	UE::Geometry::FDynamicMeshNormalOverlay* NormalOverlay = FaceMesh.Attributes()->PrimaryNormals();
 	TArray<int32> UVElementIndexes;
 	TArray<int32> NormalElementIndexes;
+	UE::Geometry::FDynamicMeshColorOverlay* ColorOverlay = FaceMesh.Attributes()->PrimaryColors();
+	TArray<int32> ColorElementIndexes;
 	// change to this type of for loop to add uv and normal
 	for (int32 i = 0; i < Vertices.Num(); ++i)
 	{
 		MeshVerticesIndexes.Add(FaceMesh.AppendVertex(Vertices[i]));
 		UVElementIndexes.Add(UVOverlay->AppendElement(UVs[i]));
 		// NormalElementIndexes.Add(NormalOverlay->AppendElement(FVector3f(Vertices[i].GetSafeNormal())));
-		NormalElementIndexes.Add(NormalOverlay->AppendElement(FVector3f(Normals[i].GetSafeNormal())));
+		NormalElementIndexes.Add(NormalOverlay->AppendElement(FVector3f(Normals[i])));
+		ColorElementIndexes.Add(ColorOverlay->AppendElement(FVector4f(Colors[i])));
 	}
 
 	// Three indexes are retrieved from the `TrianglesVerticesIndex` array to serve as the vertices of a triangle
@@ -200,13 +188,23 @@ void ACubePlanetActor::GenerateCubeFace(ECubePlanetFace Face, FDynamicMesh3& Fac
 
 		UVOverlay->SetTriangle(TriangleID, UE::Geometry::FIndex3i(UVElementIndexes[A], UVElementIndexes[B], UVElementIndexes[C]));
 		NormalOverlay->SetTriangle(TriangleID, UE::Geometry::FIndex3i(NormalElementIndexes[A], NormalElementIndexes[B], NormalElementIndexes[C]));
+		ColorOverlay->SetTriangle(TriangleID, UE::Geometry::FIndex3i(ColorElementIndexes[A], ColorElementIndexes[B], ColorElementIndexes[C]));
 	}
+}
+
+float ACubePlanetActor::GetRawTerrainHeight(const FVector& Direction) const
+{
+	// Low frequency, large amplitude; decides where continents and ocean basins are
+	const float Continent = FMath::PerlinNoise3D(Direction * ContinentFrequency + ContinentOffset) * ContinentAmplitude;
+	// High frequency, low amplitude; hills and details on top of continents
+	const float Detail = FMath::PerlinNoise3D(Direction * DetailFrequency + DetailOffset) * DetailAmplitude;
+	return Continent + Detail;
 }
 
 float ACubePlanetActor::GetTerrainHeight(const FVector& Direction) const
 {
-	const FVector SamplePoint = Direction * NoiseFrequency + NoiseOffset;
-	return FMath::PerlinNoise3D(SamplePoint) * NoiseAmplitude;
+	// Flatten everything below sea level into the ocean surface
+	return FMath::Max(GetRawTerrainHeight(Direction), SeaLevel);
 }
 
 FVector ACubePlanetActor::GetTerrainNormal(const FVector& Direction) const
@@ -230,24 +228,25 @@ FVector ACubePlanetActor::GetTerrainNormal(const FVector& Direction) const
 	return (Direction - SurfaceGradient / Radius).GetSafeNormal();
 }
 
-void ACubePlanetActor::OnCubeClicked(UPrimitiveComponent* TouchedComponent, FKey ButtonPressed)
+FLinearColor ACubePlanetActor::GetTerrainColor(const float RawHeight) const
 {
-	GEngine->AddOnScreenDebugMessage(-1, 2.0f, FColor::Yellow, TEXT("Cube clicked"));
-	if (PlayerController)
+	if (RawHeight < SeaLevel)
 	{
-		GEngine->AddOnScreenDebugMessage(-1, 5.0f, FColor::Green, TEXT("PlayerController found"));
+		// Ocean: shallow to deep blue by depth
+		const float Depth = FMath::Clamp((SeaLevel - RawHeight) / ContinentAmplitude, 0.0f, 1.0f);
+		return FMath::Lerp(FLinearColor(0.1f, 0.4f, 0.8f), FLinearColor(0.02f, 0.08f, 0.3f), Depth);
+	}
 
-		PlayerController->bShowMouseCursor = true;
-		PlayerController->bEnableClickEvents = true;
-	}
-	else
+	// Land: 0 at the coast, 1 at roughly the highest mountains
+	const float Altitude = FMath::Clamp((RawHeight - SeaLevel) / ContinentAmplitude, 0.0f, 1.0f);
+	if (Altitude < 0.03f)
 	{
-		GEngine->AddOnScreenDebugMessage(-1, 5.0f, FColor::Red, TEXT("PlayerController NOT found"));
-		return;
+		return FLinearColor(0.76f, 0.7f, 0.5f); // Beach
 	}
-	FHitResult HitResult;
-	if (PlayerController->GetHitResultUnderCursor(ECC_Visibility, false, HitResult))
+	if (Altitude < 0.6f)
 	{
-		DrawDebugSphere(GetWorld(), HitResult.ImpactPoint, 25, 12, FColor::Red, false, 2);
+		// Grass to rock as it gets higher
+		return FMath::Lerp(FLinearColor(0.2f, 0.5f, 0.15f), FLinearColor(0.4f, 0.3f, 0.2f), Altitude / 0.6f);
 	}
+	return FLinearColor(0.95f, 0.95f, 0.95f); // Snow
 }
