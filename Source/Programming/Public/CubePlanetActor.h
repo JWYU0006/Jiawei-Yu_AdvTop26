@@ -67,6 +67,8 @@ protected:
 	
 	// Terrain height (cm) above the base radius, sampled by a unit direction
 	float GetTerrainHeight(const FVector& Direction) const;
+	// Surface normal 
+	FVector GetTerrainNormal(const FVector& Direction) const;
 
 #if WITH_EDITOR
 	virtual void PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedEvent) override;

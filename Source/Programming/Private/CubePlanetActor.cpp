@@ -139,6 +139,7 @@ void ACubePlanetActor::GenerateCubeFace(ECubePlanetFace Face, FDynamicMesh3& Fac
 
 	TArray<FVector> Vertices;
 	TArray<FVector2f> UVs;
+	TArray<FVector> Normals;
 	for (int32 y = 0; y <= CubeFaceResolution; ++y)
 	{
 		for (int32 x = 0; x <= CubeFaceResolution; ++x)
@@ -149,14 +150,12 @@ void ACubePlanetActor::GenerateCubeFace(ECubePlanetFace Face, FDynamicMesh3& Fac
 			u = FMath::Tan(u * UE_PI / 4.0f);
 			v = FMath::Tan(v * UE_PI / 4.0f);
 			// When axis points toward the camera, the vertices are always arranged from bottom-right to top-left.
-			FVector Vertex = FaceNormal + AxisA * u + AxisB * v;
-			// Normalize vertex to spherize
-			Vertex = Vertex.GetSafeNormal() * PlanetRadiusSize;
-			const FVector Direction = Vertex.GetSafeNormal();
-			Vertex = Direction * (PlanetRadiusSize + GetTerrainHeight(Direction));
+			const FVector Direction = (FaceNormal + AxisA * u + AxisB * v).GetSafeNormal();
+			FVector Vertex = Direction * (PlanetRadiusSize + GetTerrainHeight(Direction));
 			Vertices.Add(Vertex);
 			// One grid cell per quad: UV of vertex (x, y) is (x, y), no need to normalize to 0-1.
 			UVs.Add(FVector2f(x, y));
+			Normals.Add(GetTerrainNormal(Direction));
 		}
 	}
 
@@ -186,7 +185,8 @@ void ACubePlanetActor::GenerateCubeFace(ECubePlanetFace Face, FDynamicMesh3& Fac
 	{
 		MeshVerticesIndexes.Add(FaceMesh.AppendVertex(Vertices[i]));
 		UVElementIndexes.Add(UVOverlay->AppendElement(UVs[i]));
-		NormalElementIndexes.Add(NormalOverlay->AppendElement(FVector3f(Vertices[i].GetSafeNormal())));
+		// NormalElementIndexes.Add(NormalOverlay->AppendElement(FVector3f(Vertices[i].GetSafeNormal())));
+		NormalElementIndexes.Add(NormalOverlay->AppendElement(FVector3f(Normals[i].GetSafeNormal())));
 	}
 
 	// Three indexes are retrieved from the `TrianglesVerticesIndex` array to serve as the vertices of a triangle
@@ -207,6 +207,27 @@ float ACubePlanetActor::GetTerrainHeight(const FVector& Direction) const
 {
 	const FVector SamplePoint = Direction * NoiseFrequency + NoiseOffset;
 	return FMath::PerlinNoise3D(SamplePoint) * NoiseAmplitude;
+}
+
+FVector ACubePlanetActor::GetTerrainNormal(const FVector& Direction) const
+{
+	// Step size for finite difference, in unit-sphere space
+	constexpr double Epsilon = 0.001;
+	const FVector StepX(Epsilon, 0.0, 0.0);
+	const FVector StepY(0.0, Epsilon, 0.0);
+	const FVector StepZ(0.0, 0.0, Epsilon);
+	// 1. 3D gradient of the height, by central difference along each axis
+	const FVector Gradient(
+		(GetTerrainHeight(Direction + StepX) - GetTerrainHeight(Direction - StepX)) / (2.0 * Epsilon),
+		(GetTerrainHeight(Direction + StepY) - GetTerrainHeight(Direction - StepY)) / (2.0 * Epsilon),
+		(GetTerrainHeight(Direction + StepZ) - GetTerrainHeight(Direction - StepZ)) / (2.0 * Epsilon)
+	);
+	// 2. Remove the radial part, keep only the slope along the surface
+	const FVector SurfaceGradient = Gradient - FVector::DotProduct(Gradient, Direction) * Direction;
+	// 3. Gradient is height change per radian, divide by radius to get height change per cm  
+	const double Radius = PlanetRadiusSize + GetTerrainHeight(Direction);
+	// 4. Normal = up - slope
+	return (Direction - SurfaceGradient / Radius).GetSafeNormal();
 }
 
 void ACubePlanetActor::OnCubeClicked(UPrimitiveComponent* TouchedComponent, FKey ButtonPressed)
