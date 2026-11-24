@@ -1,4 +1,5 @@
 #include "ErosionTestActor.h"
+#include "ErosionFilter.h"
 #include "DynamicMesh/DynamicMesh3.h"
 #include "DynamicMesh/DynamicMeshAttributeSet.h"
 
@@ -32,27 +33,20 @@ void AErosionTestActor::PostEditChangeProperty(FPropertyChangedEvent& PropertyCh
 }
 #endif
 
-float AErosionTestActor::GetHeight(const FVector2D& Position) const
+FVector3d AErosionTestActor::GetHeightAndSlope(const FVector2D& Position) const
 {
-	// Noise space: frequency sets how much of the noise is shown across the patch, offset (from seed) picks where
-	const FVector2D NormalizedPosition = Position / Size;
-	const FVector2D SamplePoint = NormalizedPosition * NoiseFrequency + NoiseOffset;
-	return FMath::PerlinNoise2D(SamplePoint) * HeightScale;
+	// Work in normalized space where the patch is 1 unit wide, as in the original shader
+	const FVector2d P = Position / Size + NoiseOffset;
+	const FVector3d Noise = FErosionFilter::FractalNoise(P, NoiseFrequency, HeightOctaves, 2.0, HeightGain) * HeightAmplitude;
+
+	// Back to cm: height scales with Size, slope (height / distance) stays the same
+	return FVector3d(Noise.X * Size, Noise.Y, Noise.Z);
 }
 
-FVector AErosionTestActor::GetNormal(const FVector2D& Position) const
+FVector AErosionTestActor::GetNormal(const FVector3d& HeightAndSlope) const
 {
-	// Small relative to vertex spacing, so the slope reflects the surface between vertices
-	const double Epsilon = Size / Resolution * 0.25;
-	const FVector2D StepX(Epsilon, 0.0);
-	const FVector2D StepY(0.0, Epsilon);
-
-	// Central difference: height change across a small step on each side
-	const double SlopeX = (GetHeight(Position + StepX) - GetHeight(Position - StepX)) / (2.0 * Epsilon);
-	const double SlopeY = (GetHeight(Position + StepY) - GetHeight(Position - StepY)) / (2.0 * Epsilon);
-
 	// Up minus slope: perpendicular to the surface
-	return FVector(-SlopeX, -SlopeY, 1.0).GetSafeNormal();
+	return FVector(-HeightAndSlope.Y, -HeightAndSlope.Z, 1.0).GetSafeNormal();
 }
 
 void AErosionTestActor::GenerateTerrain()
@@ -85,12 +79,13 @@ void AErosionTestActor::BuildMesh(UE::Geometry::FDynamicMesh3& Mesh) const
 		for (int32 x = 0; x <= Resolution; ++x)
 		{
 			const FVector2D Position(-HalfSize + x * StepSize, -HalfSize + y * StepSize);
-			const float Height = GetHeight(Position);
+			const FVector3d HeightAndSlope = GetHeightAndSlope(Position);
 
-			Mesh.AppendVertex(FVector3d(Position.X, Position.Y, Height));
+			Mesh.AppendVertex(FVector3d(Position.X, Position.Y, HeightAndSlope.X));
 			UVOverlay->AppendElement(FVector2f(x, y));
-			NormalOverlay->AppendElement(FVector3f(GetNormal(Position)));
-			ColorOverlay->AppendElement(FVector4f(GetHeightColor(Height)));
+			NormalOverlay->AppendElement(FVector3f(GetNormal(HeightAndSlope)));
+			const FLinearColor Color = bDebugPhacelle ? GetPhacelleDebugColor(Position, HeightAndSlope) : GetHeightColor(HeightAndSlope.X);
+			ColorOverlay->AppendElement(FVector4f(Color));
 		}
 	}
 
@@ -121,7 +116,27 @@ void AErosionTestActor::BuildMesh(UE::Geometry::FDynamicMesh3& Mesh) const
 
 FLinearColor AErosionTestActor::GetHeightColor(float Height) const
 {
-	// Map height from [-HeightScale, HeightScale] to [0, 1]
-	const float Alpha = FMath::Clamp(Height / HeightScale * 0.5f + 0.5f, 0.0f, 1.0f);
+	const float MaxHeight = HeightAmplitude * Size;
+	if (MaxHeight <= 0.0f)
+	{
+		return FLinearColor(0.5f, 0.5f, 0.5f);
+	}
+	const float Alpha = FMath::Clamp(Height / MaxHeight * 0.5f + 0.5f, 0.0f, 1.0f);
 	return FMath::Lerp(FLinearColor(0.15f, 0.15f, 0.15f), FLinearColor::White, Alpha);
+}
+
+FLinearColor AErosionTestActor::GetPhacelleDebugColor(const FVector2D& Position, const FVector3d& HeightAndSlope) const
+{
+	// Author's defaults: erosion scale 0.15, cell scale 0.7, so cells are about 1/10 of the patch
+	const double CellScale = 0.7;
+	const double CellFrequency = 1.0 / (0.15 * CellScale);
+	const FVector2d P = Position / Size * CellFrequency;
+
+	// Stripes should run downhill, the opposite of the slope (which points uphill)
+	const FVector2d Downhill = -FVector2d(HeightAndSlope.Y, HeightAndSlope.Z);
+	const FVector4d Phacelle = FErosionFilter::PhacelleNoise(P, Downhill.GetSafeNormal(), CellScale, 0.25, 0.5);
+
+	// Cosine wave from [-1, 1] to [0, 1]
+	const float Gray = Phacelle.X * 0.5 + 0.5;
+	return FLinearColor(Gray, Gray, Gray);
 }

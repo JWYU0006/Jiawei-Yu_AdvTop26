@@ -23,12 +23,13 @@ protected:
 
 	UFUNCTION(CallInEditor, Category = "ErosionTest")
 	void GenerateTerrain();
-
-	// Height (cm) at a position (cm) relative to the actor
-	float GetHeight(const FVector2D& Position) const;
-	FVector GetNormal(const FVector2D& Position) const;
+	
+	// X = height (cm), Y/Z = slope (dimensionless), at a position (cm) relative to the actor
+	FVector3d GetHeightAndSlope(const FVector2D& Position) const;
+	FVector GetNormal(const FVector3d& HeightAndSlope) const;
 	void BuildMesh(UE::Geometry::FDynamicMesh3& Mesh) const;
 	FLinearColor GetHeightColor(float Height) const;
+	FLinearColor GetPhacelleDebugColor(const FVector2D& Position, const FVector3d& HeightAndSlope) const;
 
 private:
 	UPROPERTY(VisibleAnywhere)
@@ -42,13 +43,21 @@ private:
 	float Size = 10000.0f;
 	// Roughly how many hills across the patch
 	UPROPERTY(EditAnywhere, Category = "ErosionTest", meta = (ClampMin = "0.0"))
-	float NoiseFrequency = 3.0f;
+	float NoiseFrequency = 3.0f;	// Height noise amplitude, relative to Size (author's default 0.125 * 0.5)
 	UPROPERTY(EditAnywhere, Category = "ErosionTest", meta = (ClampMin = "0.0"))
-	float HeightScale = 1500.0f;
+	float HeightAmplitude = 0.0625f;
+	UPROPERTY(EditAnywhere, Category = "ErosionTest", meta = (ClampMin = "1", ClampMax = "8"))
+	int32 HeightOctaves = 3;
+	// Amplitude multiplier per octave, low value keeps the input smooth for erosion
+	UPROPERTY(EditAnywhere, Category = "ErosionTest", meta = (ClampMin = "0.0", ClampMax = "1.0"))
+	float HeightGain = 0.1f;
 	UPROPERTY(EditAnywhere, Category = "ErosionTest")
 	int32 NoiseSeed = 0;
 	UPROPERTY(EditAnywhere, Category = "ErosionTest")
 	TObjectPtr<UMaterialInterface> Material;
+	// Show the raw Phacelle stripes as vertex color instead of height color
+	UPROPERTY(EditAnywhere, Category = "ErosionTest")
+	bool bDebugPhacelle = false;
 
 	// Derived from NoiseSeed in GenerateTerrain(), not editable
 	FVector2D NoiseOffset = FVector2D::ZeroVector;
