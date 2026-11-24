@@ -9,7 +9,7 @@
 ACubePlanetActor::ACubePlanetActor()
 {
 	// Set this actor to call Tick() every frame.  You can turn this off to improve performance if you don't need it.
-	PrimaryActorTick.bCanEverTick = true;
+	PrimaryActorTick.bCanEverTick = false;
 
 	DynamicMeshComponent = CreateDefaultSubobject<UDynamicMeshComponent>(
 		TEXT("DynamicMeshComponent")
@@ -80,7 +80,8 @@ void ACubePlanetActor::GeneratePlanet()
 	// void SetMesh ( UE::Geometry::FDynamicMesh3&& MoveMesh) -- UE Document -- UDynamicMesh
 	DynamicMeshComponent->SetMesh(MoveTemp(FaceMesh));
 	DynamicMeshComponent->SetMaterial(0, PlanetMaterial);
-	DynamicMeshComponent->UpdateCollision(false);
+	// Optimization test: remove repetitive collision generation
+	// DynamicMeshComponent->UpdateCollision(false);
 }
 
 void ACubePlanetActor::GenerateCubeFace(ECubePlanetFace Face, FDynamicMesh3& FaceMesh) const
